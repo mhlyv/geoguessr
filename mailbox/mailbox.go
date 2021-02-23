@@ -27,7 +27,7 @@ func Request(method string, url string, data string, header [][2]string) ([]byte
     request, err := http.NewRequest(method, url, strings.NewReader(data));
 
     if err != nil {
-        return []byte{}, err;
+        return []byte{}, fmt.Errorf("mailbox.Request: %v", err);
     }
 
     request.ContentLength = int64(len(data));
@@ -37,14 +37,14 @@ func Request(method string, url string, data string, header [][2]string) ([]byte
     response, err := client.Do(request);
 
     if err != nil {
-        return []byte{}, err;
+        return []byte{}, fmt.Errorf("mailbox.Request: %v", err);
     }
 
     defer response.Body.Close();
     contents, err := ioutil.ReadAll(response.Body);
 
     if err != nil {
-        return []byte{}, err;
+        return []byte{}, fmt.Errorf("mailbox.Request: %v", err);
     }
 
     return contents, nil;
@@ -53,13 +53,13 @@ func Request(method string, url string, data string, header [][2]string) ([]byte
 func getBody(url string) ([]byte, error) {
     response, err := http.Get(url);
     if err != nil {
-        return []byte{}, err;
+        return []byte{}, fmt.Errorf("mailbox.getBody: %v", err);
     }
 
     defer response.Body.Close();
     raw, err := ioutil.ReadAll(response.Body);
     if err != nil {
-        return raw, err;
+        return []byte{}, fmt.Errorf("mailbox.getBody: %v", err);
     }
 
     return raw, nil;
@@ -68,7 +68,7 @@ func getBody(url string) ([]byte, error) {
 func (m *MailBox) Init() error {
     raw, err := getBody(API_BASE_URL + "?action=genRandomMailbox");
     if err != nil {
-        return err;
+        return fmt.Errorf("mailbox.MailBox.Init: %v", err);
     }
 
     /// this works but it's not right
@@ -78,7 +78,7 @@ func (m *MailBox) Init() error {
     var addresses []string
     err = json.Unmarshal(raw, &addresses);
     if err != nil {
-        return err;
+        return fmt.Errorf("mailbox.MailBox.Init: %v", err);
     }
 
     split := strings.Split(addresses[0], "@");
@@ -92,13 +92,13 @@ func (m *MailBox) GetMessageIds() ([]int, error) {
     raw, err := getBody(API_BASE_URL + "?action=getMessages" +
         "&login=" + m.login + "&domain=" + m.domain);
     if err != nil {
-        return ids, err;
+        return []int{}, fmt.Errorf("mailbox.MailBox.GetMessageIds: %v", err);
     }
 
     var mails []map[string]interface{};
     err = json.Unmarshal(raw, &mails);
     if err != nil {
-        return ids, err;
+        return []int{}, fmt.Errorf("mailbox.MailBox.GetMessageIds: %v", err);
     }
 
     for i := range mails {
@@ -114,13 +114,13 @@ func (m *MailBox) ReadMessage(id int) (string, error) {
         fmt.Sprintf("&id=%d", id));
 
     if err != nil {
-        return string(raw), err;
+        return "", fmt.Errorf("mailbox.MailBox.ReadMessage: %v", err);
     }
 
     var msg map[string]interface{};
     err = json.Unmarshal(raw, &msg);
     if err != nil {
-        return "", err;
+        return "", fmt.Errorf("mailbox.MailBox.ReadMessage: %v", err);
     }
 
     return msg["body"].(string), nil;

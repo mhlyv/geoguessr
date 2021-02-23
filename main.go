@@ -3,8 +3,10 @@ package main
 import (
     "errors"
     "fmt"
+    "io"
     "log"
     "net/http"
+    "os"
     "regexp"
     "time"
 
@@ -13,18 +15,19 @@ import (
 
 const PORT = 8080;
 
-// this is ugly but it has to be done, otherwise
-// the regex needs to be recompiled again and again
-var hrefPattern = func () *regexp.Regexp{
-    pattern, err := regexp.Compile("href=\\\"([^\"]+)\\\"");
-    if err != nil {
-        panic(err);
-    }
-    return pattern;
-}();
+// this is ugly
+var (
+    hrefPattern = func () *regexp.Regexp{
+        pattern, err := regexp.Compile("href=\\\"([^\"]+)\\\"");
+        if err != nil {
+            panic(err);
+        }
+        return pattern;
+    }();
+)
 
 func signUp(m *mailbox.MailBox) error {
-    content, err := mailbox.Request(
+    _, err := mailbox.Request(
         "POST",
         "https://www.geoguessr.com/api/v3/accounts/signup",
         fmt.Sprintf("{\"email\":\"%s\"}", m.GetAddr()),
@@ -37,10 +40,8 @@ func signUp(m *mailbox.MailBox) error {
     );
 
     if err != nil {
-        return err;
+        return fmt.Errorf("signUp: %v", err);
     }
-
-    fmt.Println(string(content));
 
     return nil;
 }
@@ -56,7 +57,7 @@ func getVerificationId(m *mailbox.MailBox) (int, error) {
 
         ids, err := m.GetMessageIds();
         if err != nil {
-            panic(err);
+            return 0, fmt.Errorf("getVerificationId: %v", err);
         }
 
         if len(ids) > 0 {
@@ -72,44 +73,65 @@ func getVerificationId(m *mailbox.MailBox) (int, error) {
     return 0, nil;
 }
 
-func getGeoguessrUrl() string {
+func getGeoguessrUrl() (string, error) {
     mail := &mailbox.MailBox{};
     err := mail.Init();
 
     if err != nil {
-        panic(err);
+        return "", fmt.Errorf("getGeoguessrUrl: %v", err);
     }
 
-    fmt.Printf("'%s'\n", mail.GetAddr());
     err = signUp(mail);
 
     if err != nil {
-        panic(err);
+        return "", fmt.Errorf("getGeoguessrUrl: %v", err);
     }
 
     id, err := getVerificationId(mail);
     if err != nil {
-        panic(err);
+        return "", fmt.Errorf("getGeoguessrUrl: %v", err);
     }
 
     msg, err := mail.ReadMessage(id);
     if err != nil {
-        panic(err);
+        return "", fmt.Errorf("getGeoguessrUrl: %v", err);
     }
 
     matched := hrefPattern.FindStringSubmatch(msg);
     if len(matched) < 2 {
-        panic("regex failed");
+        return "", errors.New("url extraction failed");
     }
 
-    return matched[1];
+    return matched[1], nil;
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-    http.Redirect(w, r, getGeoguessrUrl(), 301);
+    logFile, err := os.OpenFile("/tmp/geoguessr.log", os.O_RDWR | os.O_CREATE | os.O_APPEND, 0666);
+    if err != nil {
+        panic(err);
+    }
+    defer logFile.Close();
+    log.SetOutput(io.MultiWriter(os.Stdout, logFile));
+
+    w.Header().Set("Cache-Control", "no-cache,no-store,max-age=0");
+    url, err := getGeoguessrUrl();
+    if err != nil {
+        log.Println(r, err);
+        fmt.Fprintf(w, "Internal error: '%v'\nTry again!\n", err);
+    } else {
+        log.Println(r, url);
+        http.Redirect(w, r, url, 301);
+    }
 }
 
 func main() {
+    logFile, err := os.OpenFile("/tmp/geoguessr.log", os.O_RDWR | os.O_CREATE | os.O_APPEND, 0666);
+    if err != nil {
+        panic(err);
+    }
+    defer logFile.Close();
+    log.SetOutput(io.MultiWriter(os.Stdout, logFile));
+
     http.HandleFunc("/", handler);
     log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", PORT), nil));
 }

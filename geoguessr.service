@@ -1,0 +1,12 @@
+[Unit]
+Description=Geoguessr http server
+After=network.target
+After=syslog.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+ExecStart=/usr/local/bin/geoguessr
+Restart=always
+Type=forking
