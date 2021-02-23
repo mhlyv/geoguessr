@@ -36,12 +36,10 @@ func main() {
         panic(err);
     }
 
-    fmt.Println(mail);
+    fmt.Printf("'%s'\n", mail.GetAddr());
     err = signUp(mail);
 
     if err != nil {
         panic(err);
     }
-
-    mail.Delete();
 }
