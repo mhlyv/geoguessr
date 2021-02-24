@@ -8,5 +8,5 @@ WantedBy=multi-user.target
 
 [Service]
 ExecStart=/usr/local/bin/geoguessr
-Restart=always
-Type=forking
+Restart=on-failure
+Type=simple
